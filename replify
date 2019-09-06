@@ -8,19 +8,27 @@ import shlex
 import subprocess
 import sys
 
+PROMPT = "$ "
+
+SHELL_ESCAPE = ":"
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("template", nargs="+")
-    parser.add_argument("--format", action="store_true")
+    parser.add_argument("--format", action=ToggleAction, default=False,
+            help="use advanced formatting (default: false)")
+    parser.add_argument("--escape", action=ToggleAction, default=True,
+            help="allow shell escapes (default: true)")
     args = parser.parse_args()
 
-    repl = REPL(args.template, args.format)
+    repl = REPL(args.template, args.format, args.escape)
     repl.loop()
 
 class REPL:
-    def __init__(self, template=None, format=False):
+    def __init__(self, template=None, format=False, escape=True):
         self.template = template or []
         self.format = format
+        self.escape = escape
 
         readline.parse_and_bind("tab: complete")
 
@@ -32,12 +40,15 @@ class REPL:
         self.evaluate(line)
 
     def read(self):
-        line = input("$ ").strip()
+        line = input(PROMPT).strip()
         if len(line) == 0:
             return None
 
-        parts = shlex.split(line)
+        if self.escape and line.startswith(SHELL_ESCAPE):
+            rest = line[len(SHELL_ESCAPE):]
+            return shlex.split(rest)
 
+        parts = shlex.split(line)
         if self.format:
             return apply_format(self.template, parts)
         else:
@@ -84,6 +95,29 @@ def apply_format(templates, items):
             final.append(result)
 
     return final
+
+class ToggleAction(argparse.Action):
+    def __init__(self, option_strings, dest, default=None, required=False, help=None):
+        if default is None:
+            raise ValueError("default must be provided for the toggle")
+
+        if len(option_strings) != 1:
+            raise ValueError("incorrect number of options provided")
+        opt = option_strings[0]
+
+        if not opt.startswith("--"):
+            raise ValueError("option must be in long form")
+
+        opt = opt[2:]
+        opts = ['--' + opt, '--no-' + opt]
+        super().__init__(opts, dest, nargs=0, const=None, default=default,
+                         required=required, help=help)
+
+    def __call__(self, parser, namespace, values, option_strings):
+        if option_strings.startswith('--no-'):
+            setattr(namespace, self.dest, False)
+        else:
+            setattr(namespace, self.dest, True)
 
 if __name__ == "__main__":
     main()
