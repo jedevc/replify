@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import re
+import readline
+import shlex
+import subprocess
+import sys
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("template", nargs="+")
+    parser.add_argument("--format", action="store_true")
+    args = parser.parse_args()
+
+    repl = REPL(args.template, args.format)
+    repl.loop()
+
+class REPL:
+    def __init__(self, template=None, format=False):
+        self.template = template or []
+        self.format = format
+
+        readline.parse_and_bind("tab: complete")
+
+    def do(self):
+        line = self.read()
+        if not line:
+            return
+
+        self.evaluate(line)
+
+    def read(self):
+        line = input("$ ").strip()
+        if len(line) == 0:
+            return None
+
+        parts = shlex.split(line)
+
+        if self.format:
+            return apply_format(self.template, parts)
+        else:
+            return self.template + parts
+
+    def evaluate(self, args):
+        try:
+            subprocess.run(args, env=os.environ.copy())
+        except FileNotFoundError:
+            message = "replify: command not found: {}".format(args[0])
+            print(message, file=sys.stderr)
+        
+    def loop(self):
+        try:
+            while True:
+                try:
+                    self.do()
+                except KeyboardInterrupt:
+                    print()
+        except EOFError:
+            return
+
+SLICE_REGEX = re.compile(r"{(-?\d*):(-?\d*)}")
+INDEX_REGEX = re.compile(r"{(-?\d+)}")
+
+def apply_format(templates, items):
+    final = []
+
+    for template in templates:
+        match = SLICE_REGEX.search(template)
+        if match:  # try to find a slice
+            if match.start() == 0 and match.end() == len(template):
+                start = int(match[1]) if match[1] else 0
+                end = int(match[2]) if match[2] else len(items)
+
+                final.extend(items[start:end])
+            else:
+                message = "replify: slice cannot be part of a larger argument"
+                print(message, file=sys.stderr)
+                return None
+        else:
+            # replace all indexes
+            result = INDEX_REGEX.sub(lambda m: items[int(m[1])] if int(m[1]) < len(items) else '', template)
+            final.append(result)
+
+    return final
+
+if __name__ == "__main__":
+    main()
