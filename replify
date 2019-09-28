@@ -15,20 +15,23 @@ SHELL_ESCAPE = ":"
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("template", nargs="+")
+    parser.add_argument("-v", "--verbose", action='store_true',
+            help="print out commands before executing them")
     parser.add_argument("--format", action=ToggleAction, default=False,
             help="use advanced formatting (default: false)")
     parser.add_argument("--escape", action=ToggleAction, default=True,
             help="allow shell escapes (default: true)")
     args = parser.parse_args()
 
-    repl = REPL(args.template, args.format, args.escape)
+    repl = REPL(args.template, args.format, args.escape, args.verbose)
     repl.loop()
 
 class REPL:
-    def __init__(self, template=None, format=False, escape=True):
+    def __init__(self, template=None, format=False, escape=True, verbose=False):
         self.template = template or []
         self.format = format
         self.escape = escape
+        self.verbose = verbose
 
         readline.parse_and_bind("tab: complete")
 
@@ -59,6 +62,8 @@ class REPL:
 
     def evaluate(self, args):
         try:
+            if self.verbose:
+                print(' '.join(shlex.quote(arg) for arg in args))
             subprocess.run(args, env=os.environ.copy())
         except FileNotFoundError:
             message = "replify: command not found: {}".format(args[0])
