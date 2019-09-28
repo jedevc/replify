@@ -42,7 +42,10 @@ class REPL:
     def read(self):
         line = input(PROMPT).strip()
         if len(line) == 0:
-            return None
+            if self.format:
+                return apply_format(self.template, [])
+            else:
+                return self.template
 
         if self.escape and line.startswith(SHELL_ESCAPE):
             rest = line[len(SHELL_ESCAPE):]
